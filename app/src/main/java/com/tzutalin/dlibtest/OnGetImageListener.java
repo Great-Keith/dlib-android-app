@@ -74,7 +74,7 @@ public class OnGetImageListener implements OnImageAvailableListener {
     private FloatingCameraWindow mWindow;
     private Paint mFaceLandmardkPaint;
 
-    public void initialize(
+    void initialize(
             final Context context,
             final AssetManager assetManager,
             final TrasparentTitleView scoreView,
@@ -91,7 +91,7 @@ public class OnGetImageListener implements OnImageAvailableListener {
         mFaceLandmardkPaint.setStyle(Paint.Style.STROKE);
     }
 
-    public void deInitialize() {
+    void deInitialize() {
         synchronized (OnGetImageListener.this) {
             if (mFaceDet != null) {
                 mFaceDet.release();

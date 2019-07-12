@@ -27,6 +27,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Camera;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -44,6 +45,7 @@ import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.util.Size;
 import android.util.SparseArray;
@@ -53,6 +55,8 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CompoundButton;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -75,6 +79,7 @@ public class CameraConnectionFragment extends Fragment {
     private static final int MINIMUM_PREVIEW_SIZE = 320;
     private static final String TAG = "CameraConnectionFragment";
 
+    private Switch switchBtn;
     private TrasparentTitleView mScoreView;
 
     /**
@@ -90,6 +95,7 @@ public class CameraConnectionFragment extends Fragment {
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
+    // 安卓的TextureView用于渲染的一个View
     /**
      * {@link android.view.TextureView.SurfaceTextureListener} handles several lifecycle events on a
      * {@link TextureView}.
@@ -99,13 +105,13 @@ public class CameraConnectionFragment extends Fragment {
                 @Override
                 public void onSurfaceTextureAvailable(
                         final SurfaceTexture texture, final int width, final int height) {
-                    openCamera(width, height);
+                    openCamera(width, height, false);
                 }
 
                 @Override
                 public void onSurfaceTextureSizeChanged(
                         final SurfaceTexture texture, final int width, final int height) {
-                    configureTransform(width, height);
+                    configureTransform(width, height, switchBtn.isChecked());
                 }
 
                 @Override
@@ -292,7 +298,17 @@ public class CameraConnectionFragment extends Fragment {
     @Override
     public void onViewCreated(final View view, final Bundle savedInstanceState) {
         textureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+        // 上方要显示使用时间
         mScoreView = (TrasparentTitleView) view.findViewById(R.id.results);
+        // 用于切换相机
+        switchBtn = (Switch) view.findViewById(R.id.cameraSwitch);
+        switchBtn.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                closeCamera();
+                openCamera(textureView.getWidth(), textureView.getHeight(), b);
+            }
+        });
     }
 
     @Override
@@ -310,7 +326,7 @@ public class CameraConnectionFragment extends Fragment {
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener).
         if (textureView.isAvailable()) {
-            openCamera(textureView.getWidth(), textureView.getHeight());
+            openCamera(textureView.getWidth(), textureView.getHeight(), switchBtn.isChecked());
         } else {
             textureView.setSurfaceTextureListener(surfaceTextureListener);
         }
@@ -331,47 +347,72 @@ public class CameraConnectionFragment extends Fragment {
      */
     @DebugLog
     @SuppressLint("LongLogTag")
-    private void setUpCameraOutputs(final int width, final int height) {
+    private void setUpCameraOutputs(final int width, final int height, boolean b) {
         final Activity activity = getActivity();
         final CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
+            // 记录每一种摄像头个数
             SparseArray<Integer> cameraFaceTypeMap = new SparseArray<>();
             // Check the facing types of camera devices
             for (final String cameraId : manager.getCameraIdList()) {
                 final CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+                // CameraCharacteristics.LENS_FACING: 摄像头的朝向(后置LENS_FACING_BACK/前置LENS_FACING_FRONT)
                 final Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
                 if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                    // 如果使用的是前置摄像头
                     if (cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_FRONT) != null) {
+                        // 数量+1
                         cameraFaceTypeMap.append(CameraCharacteristics.LENS_FACING_FRONT, cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_FRONT) + 1);
                     } else {
+                        // 初始为1
                         cameraFaceTypeMap.append(CameraCharacteristics.LENS_FACING_FRONT, 1);
                     }
                 }
 
                 if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                    // 如果使用的是后置摄像头
                     if (cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_FRONT) != null) {
+                        // 数量+1
                         cameraFaceTypeMap.append(CameraCharacteristics.LENS_FACING_BACK, cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_BACK) + 1);
                     } else {
+                        // 初始为1
                         cameraFaceTypeMap.append(CameraCharacteristics.LENS_FACING_BACK, 1);
                     }
                 }
             }
 
+
+
+            // 后置摄像头的个数
             Integer num_facing_back_camera = cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_BACK);
+            Integer num_facing_front_camera = cameraFaceTypeMap.get(CameraCharacteristics.LENS_FACING_FRONT);
             for (final String cameraId : manager.getCameraIdList()) {
                 final CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
                 final Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                // If facing back camera or facing external camera exist, we won't use facing front camera
-                if (num_facing_back_camera != null && num_facing_back_camera > 0) {
-                    // We don't use a front facing camera in this sample if there are other camera device facing types
-                    if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                        continue;
+
+                if(b) {
+                    // 只使用后置摄像头
+                    // If facing back camera or facing external camera exist, we won't use facing front camera
+                    if (num_facing_back_camera != null && num_facing_back_camera > 0) {
+                        // 前置摄像头跳过(如果有后置摄像头)
+                        // We don't use a front facing camera in this sample if there are other camera device facing types
+                        if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                            continue;
+                        }
+                    }
+                } else {
+                    // 只使用前置摄像头
+                    if (num_facing_front_camera != null && num_facing_front_camera > 0) {
+                        // 前置摄像头跳过(如果有后置摄像头)
+                        // We don't use a front facing camera in this sample if there are other camera device facing types
+                        if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                            continue;
+                        }
                     }
                 }
 
                 final StreamConfigurationMap map =
                         characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-
                 if (map == null) {
                     continue;
                 }
@@ -414,9 +455,9 @@ public class CameraConnectionFragment extends Fragment {
      */
     @SuppressLint("LongLogTag")
     @DebugLog
-    private void openCamera(final int width, final int height) {
-        setUpCameraOutputs(width, height);
-        configureTransform(width, height);
+    private void openCamera(final int width, final int height, boolean b) {
+        setUpCameraOutputs(width, height, b);
+        configureTransform(width, height, b);
         final Activity activity = getActivity();
         final CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -554,7 +595,7 @@ public class CameraConnectionFragment extends Fragment {
                     new CameraCaptureSession.StateCallback() {
 
                         @Override
-                        public void onConfigured(final CameraCaptureSession cameraCaptureSession) {
+                        public void onConfigured(@NonNull final CameraCaptureSession cameraCaptureSession) {
                             // The camera is already closed
                             if (null == cameraDevice) {
                                 return;
@@ -602,7 +643,7 @@ public class CameraConnectionFragment extends Fragment {
      * @param viewHeight The height of `mTextureView`
      */
     @DebugLog
-    private void configureTransform(final int viewWidth, final int viewHeight) {
+    private void configureTransform(final int viewWidth, final int viewHeight, boolean b) {
         final Activity activity = getActivity();
         if (null == textureView || null == previewSize || null == activity) {
             return;

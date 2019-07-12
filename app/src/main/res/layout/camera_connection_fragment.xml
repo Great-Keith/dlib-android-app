@@ -28,5 +28,12 @@
         android:layout_width="match_parent"
         android:layout_height="112dp"
         android:layout_alignParentTop="true" />
-        
+
+    <Switch
+        android:id="@+id/cameraSwitch"
+        android:layout_width="158dp"
+        android:layout_height="76dp"
+        android:layout_alignParentEnd="true"
+        android:text="@string/SWITCH_LABEL" />
+
 </RelativeLayout>
