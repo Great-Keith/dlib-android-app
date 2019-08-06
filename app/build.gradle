@@ -11,6 +11,12 @@ android {
         versionCode rootProject.ext.releaseVersionCode
         versionName "${rootProject.ext.releaseVersionName}"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
+        }
     }
     buildTypes {
         release {
@@ -22,6 +28,12 @@ android {
     sourceSets {
         main {
             assets.srcDirs = ['src/main/res/raw']
+            jniLibs.srcDirs = ["src/main/jniLibs"]
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
         }
     }
 }
